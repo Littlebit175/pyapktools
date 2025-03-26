@@ -226,13 +226,16 @@ def install_apk(device_ids: List[str] = None, input_file: str = None, devices_cs
 
         print(f"\n{total_packages} 個のパッケージを {total_devices} 台のデバイスにインストールします...")
 
+        # スクリプトの場所を基準とした相対パスを使用
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
         for idx, device in enumerate(device_ids, 1):
             print(f"\n[{idx}/{total_devices}] デバイス {device} にインストール中...")
             failed_packages = []
             
             for pkg_idx, package in enumerate(packages, 1):
                 print(f"  [{pkg_idx}/{total_packages}] {package} をインストール中...")
-                package_dir = os.path.abspath(os.path.join("apks", package))
+                package_dir = os.path.join(script_dir, "apks", package)
                 
                 if not os.path.exists(package_dir):
                     print(f"    ✗ パッケージディレクトリが見つかりません: {package_dir}")
@@ -247,8 +250,8 @@ def install_apk(device_ids: List[str] = None, input_file: str = None, devices_cs
                     for f in files:
                         print(f"      - {f}")
 
-                    # APKファイルの絶対パスを取得（desktop.iniを除外）
-                    apk_files = [os.path.join(package_dir, f) for f in files]
+                    # APKファイルの相対パスを取得（desktop.iniを除外）
+                    apk_files = [os.path.join("apks", package, f) for f in files]
                     if not apk_files:
                         print(f"    ✗ APKファイルが見つかりません: {package_dir}")
                         failed_packages.append(package)
@@ -291,7 +294,7 @@ def install_apk(device_ids: List[str] = None, input_file: str = None, devices_cs
         raise
 
 def main():
-    parser= argparse.ArgumentParser(description='Android APK管理ツール')
+    parser = argparse.ArgumentParser(description='Android APK管理ツール')
     subparsers = parser.add_subparsers(dest='command')
     
     # デバイス情報取得

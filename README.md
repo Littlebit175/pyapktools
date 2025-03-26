@@ -57,7 +57,7 @@ python apk_manager.py install -d <デバイスID1> <デバイスID2> -f apps.txt
 python apk_manager.py install -c devices.csv -f apps.txt
 ```
 
-指定されたパッケージリストに基づいて、`./apks/<パッケージ名>/`ディレクトリから
+指定されたパッケージリストに基づいて、`apks/<パッケージ名>/`ディレクトリから
 APKファイルを読み込み、指定されたデバイスにインストールします。
 
 ## 注意事項
