@@ -1,102 +1,82 @@
 # Android APK管理ツール
 
-## 概要
-ADBコマンドを利用した高度なAndroidデバイス向けAPK管理ツールです。以下の機能を提供します。
+Androidデバイスに対するAPKの管理を支援するコマンドラインツールです。
 
-## 主な機能
-- 接続デバイス情報のCSV出力（マルチデバイス対応）
-- インストール済みユーザーアプリ一覧のテキスト出力（フィルタリング機能付き）
-- 複数APKの一括ダウンロード（Android → PC）
-- 複数APKの一括インストール（PC → Android）
-- 分割APK対応（自動マージ機能）
-- 詳細エラーログ出力（エラー箇所特定機能）
-- Windows/Linuxクロスプラットフォーム対応
+## 機能
 
-## 新機能（v1.1）
-- 強化されたパス処理（特殊文字/空白文字対応）
-- 高度なデバッグモード（VSCode統合）
-- 自動リトライ機能（ネットワーク不安定時）
-- 進捗表示機能（リアルタイムプログレスバー）
-- セーフモード（システムファイル保護）
+1. 接続デバイス情報の取得（CSV出力）
+2. インストール済アプリ一覧の取得
+3. APKのダウンロード（Android → PC）
+4. APKのインストール（PC → Android）
 
-## 動作環境
-- **OS**: Windows 11 / Ubuntu 22.04 LTS
-- **Python**: 3.10以上
-- **必須ツール**:
-  - ADB（Android Debug Bridge）v33.0.3以上
-  - VSCode（デバッグ機能利用時）
+## 使用方法
 
-## インストール
+### 1. デバイス情報の取得
+
+接続されているAndroidデバイスの情報をCSVファイルに出力します。
+
 ```bash
-git clone https://github.com/your-repository/apk-manager.git
-cd apk-manager
-pip install -r requirements.txt
-```
-
-## 基本使用方法
-### デバイス管理
-```bash
-# 接続デバイス一覧取得（CSV出力）
 python apk_manager.py get_devices -o devices.csv
-
-# アプリ一覧取得（テキスト出力）
-python apk_manager.py apps -o apps.txt -d [デバイスID]
 ```
 
-### APK操作
-```bash
-# 複数APKダウンロード（ファイル指定）
-python apk_manager.py download -f apps.txt -d ABCD1234
+### 2. アプリ一覧の取得
 
-# 分割APKインストール
-python apk_manager.py install -p ./apks/package_name -d ABCD1234
-```
-
-## 高度な使用方法
-### デバッグモード
-1. VSCodeでプロジェクトを開く
-2. `F5`キーでデバッグ開始
-3. デバイスID入力プロンプトに接続デバイスのIDを入力
+デバイスにインストールされているアプリの一覧を取得します。
 
 ```bash
-# デバッグログ有効化（詳細出力）
-python apk_manager.py --debug [command]
+# 単一デバイスの場合
+python apk_manager.py get_apps -o apps.txt -d <デバイスID>
+
+# デバイスIDを省略すると、接続されている最初のデバイスが対象になります
+python apk_manager.py get_apps -o apps.txt
 ```
 
-### バッチ処理
+### 3. APKのダウンロード
+
+デバイスからAPKファイルをダウンロードします。
+
 ```bash
-# 複数デバイスへの一括インストール
-python apk_manager.py batch-install -i devices.csv -p ./apks
+# テキストファイルからパッケージ名を読み込む場合
+python apk_manager.py download -f apps.txt -d <デバイスID>
+
+# パッケージ名を直接指定する場合
+python apk_manager.py download -p com.example.app1 com.example.app2 -d <デバイスID>
 ```
 
-## トラブルシューティング
+ダウンロードしたAPKは `./apks/<パッケージ名>/` ディレクトリに保存されます。
+
+### 4. APKのインストール
+
+PCからデバイスにAPKをインストールします。
+
 ```bash
-# エラーログ確認
-tail -f apk_manager_error.log
+# デバイスIDを直接指定してインストール
+python apk_manager.py install -d <デバイスID1> <デバイスID2> -f apps.txt
 
-# ADB接続テスト
-python apk_manager.py test-connection -d ABCD1234
-
-# セーフモード起動
-python apk_manager.py --safe-mode [command]
+# get_devicesで出力したCSVファイルを使用してインストール
+python apk_manager.py install -c devices.csv -f apps.txt
 ```
 
-## 開発者向け情報
-### デバッグ環境設定
-`.vscode/launch.json` に以下のデバッグプロファイルが含まれます：
-- APKダウンロードデバッグ
-- ユニットテスト実行
-- カバレッジ計測
-- 複合デバッグセット
+指定されたパッケージリストに基づいて、`./apks/<パッケージ名>/`ディレクトリから
+APKファイルを読み込み、指定されたデバイスにインストールします。
 
-### テスト実行
-```bash
-# ユニットテスト（詳細出力）
-python -m pytest tests/ -v
+## 注意事項
 
-# カバレッジレポート生成
-python -m pytest --cov=apk_manager --cov-report=html
-```
+- ADBがシステムパスに設定されている必要があります
+- デバイスのUSBデバッグが有効になっている必要があります
+- エラーログは `apk_manager_error.log` に出力されます
+- Split APKsにも対応しています
+- Android設定で以下を有効にする必要があります：
+  1. 開発者オプション > USBデバッグ
+  2. 開発者オプション > 不明なアプリのインストールを許可
+  3. セキュリティ設定 > 提供元不明のアプリ（デバイスによって場所が異なる）
+- インストール時に表示される確認ダイアログで「許可」を選択してください
+- Android 10以降では権限の自動付与が制限される場合があります
 
-## ライセンス
-MIT License
+## エラー発生時
+
+エラーが発生した場合は、以下を確認してください：
+
+1. ADBがインストールされ、パスが通っているか
+2. デバイスが正しく接続されているか（`adb devices`で確認）
+3. エラーログ（apk_manager_error.log）の内容
