@@ -7,7 +7,7 @@ Androidデバイスに対するAPKの管理を支援するコマンドライン�
 1. 接続デバイス情報の取得（CSV出力）
 2. インストール済アプリ一覧の取得
 3. APKのダウンロード（Android → PC）
-4. APKのインストール（PC → Android）
+4. APKの並列インストール（PC → Android、最大同時処理数設定可能）
 
 ## 使用方法
 
@@ -45,20 +45,26 @@ python apk_manager.py download -p com.example.app1 com.example.app2 -d <デバ�
 
 ダウンロードしたAPKは `./apks/<パッケージ名>/` ディレクトリに保存されます。
 
-### 4. APKのインストール
+### 4. APKの並列インストール
 
-PCからデバイスにAPKをインストールします。
+複数デバイスへ同時並行でAPKをインストールします（max_workersパラメータで同時処理数を設定可能）。
 
 ```bash
-# デバイスIDを直接指定してインストール
-python apk_manager.py install -d <デバイスID1> <デバイスID2> -f apps.txt
-
-# get_devicesで出力したCSVファイルを使用してインストール
+# 基本コマンド（デフォルト：4並列）
 python apk_manager.py install -c devices.csv -f apps.txt
+
+# 最大並列数を指定（--max_workersオプション）
+python apk_manager.py install -c devices.csv -f apps.txt --max_workers 4  # デフォルト値
 ```
 
+**主な特徴**:
+- マルチスレッド処理による高速インストール
+- リアルタイム進捗表示（tqdm統合）
+- 自動リトライ機能（最大3回試行）
+- スレッドセーフなログ出力
+
 指定されたパッケージリストに基づいて、`apks/<パッケージ名>/`ディレクトリから
-APKファイルを読み込み、指定されたデバイスにインストールします。
+APKファイルを読み込み、指定された全デバイスに並列でインストールします。
 
 ## 注意事項
 

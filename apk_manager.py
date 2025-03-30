@@ -18,6 +18,7 @@ import shlex
 import os
 import sys
 import logging
+import threading
 from typing import List, Dict
 
 # ログ設定
@@ -193,15 +194,20 @@ def download_apk(package_names: List[str] = None, device_id: str = None, input_f
         print(f"エラーが発生しました: {error_msg}")
         raise
 
-def install_apk(device_ids: List[str] = None, input_file: str = None, devices_csv: str = None) -> None:
+def install_apk(device_ids: List[str] = None, input_file: str = None, devices_csv: str = None, max_workers: int = 4) -> None:
     """
-    APKをインストール
+    APKを並列インストール
     
     Args:
         device_ids (List[str], optional): デバイスIDリスト
         input_file (str): パッケージリストファイル（get_appsで出力した形式）
         devices_csv (str, optional): get_devicesで出力したデバイス情報CSV
+        max_workers (int): 最大同時接続数（デフォルト4）
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    from tqdm import tqdm
+    
     try:
         if devices_csv:
             device_ids = []
@@ -212,76 +218,81 @@ def install_apk(device_ids: List[str] = None, input_file: str = None, devices_cs
         if not device_ids:
             raise ValueError("デバイスIDが指定されていません")
 
-        # パッケージリストファイルを読み込む
         with open(input_file, 'r', encoding='utf-8') as f:
             packages = [line.strip() for line in f if line.strip()]
         
         if not packages:
             raise ValueError("パッケージリストが空です")
 
-        total_devices = len(device_ids)
-        total_packages = len(packages)
-        success_devices = []
-        failed_devices = {}
-
-        print(f"\n{total_packages} 個のパッケージを {total_devices} 台のデバイスにインストールします...")
-
-        # スクリプトの場所を基準とした相対パスを使用
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        for idx, device in enumerate(device_ids, 1):
-            print(f"\n[{idx}/{total_devices}] デバイス {device} にインストール中...")
+        print_lock = threading.Lock()
+        progress_bar = tqdm(total=len(device_ids)*len(packages), desc="インストール進捗", unit="pkg")
+
+        def device_install(device: str) -> dict:
+            """個別デバイスへのインストール処理"""
+            nonlocal packages, script_dir
             failed_packages = []
             
-            for pkg_idx, package in enumerate(packages, 1):
-                print(f"  [{pkg_idx}/{total_packages}] {package} をインストール中...")
+            for package in packages:
                 package_dir = os.path.join(script_dir, "apks", package)
-                
-                if not os.path.exists(package_dir):
-                    print(f"    ✗ パッケージディレクトリが見つかりません: {package_dir}")
-                    failed_packages.append(package)
-                    continue
+                apk_files = []
                 
                 try:
-                    # デバッグ情報を出力
-                    print(f"    確認中のディレクトリ: {package_dir}")
-                    print(f"    ディレクトリ内のファイル:")
-                    files = [f for f in os.listdir(package_dir) if f.endswith('.apk')]
-                    for f in files:
-                        print(f"      - {f}")
-
-                    # APKファイルの相対パスを取得（desktop.iniを除外）
-                    apk_files = [os.path.join("apks", package, f) for f in files]
-                    if not apk_files:
-                        print(f"    ✗ APKファイルが見つかりません: {package_dir}")
+                    if not os.path.exists(package_dir):
+                        with print_lock:
+                            tqdm.write(f"{device}: パッケージディレクトリ不存在 {package_dir}")
                         failed_packages.append(package)
+                        progress_bar.update(1)
                         continue
 
-                    # インストールコマンドを実行（-gオプションを削除）
-                    install_cmd = ["install-multiple", "-r"] + apk_files
-                    print(f"    インストールコマンド実行: adb {' '.join(install_cmd)}")
+                    files = [f for f in os.listdir(package_dir) if f.endswith('.apk')]
+                    apk_files = [os.path.join("apks", package, f) for f in files]
                     
-                    # デバイスのビルド情報を確認
-                    try:
-                        build_info = run_adb_command("shell getprop ro.build.version.sdk", device)
-                        sdk_version = int(build_info.stdout.strip())
-                        print(f"    デバイスのSDKバージョン: {sdk_version}")
-                    except Exception as e:
-                        print(f"    SDKバージョン取得失敗: {e}")
-                        sdk_version = 0
-                    
-                    run_adb_command(install_cmd, device)
-                    print(f"    ✓ インストール成功")
-                except Exception as e:
-                    print(f"    ✗ インストール失敗: {e}")
-                    failed_packages.append(package)
-            
-            if not failed_packages:
-                success_devices.append(device)
-            else:
-                failed_devices[device] = failed_packages
+                    if not apk_files:
+                        with print_lock:
+                            tqdm.write(f"{device}: APKファイル不存在 {package}")
+                        failed_packages.append(package)
+                        progress_bar.update(1)
+                        continue
 
-        print(f"\n完了: {len(success_devices)}/{total_devices} デバイスで成功")
+                    install_cmd = ["install-multiple", "-r"] + apk_files
+                    
+                    # リトライメカニズム（最大3回）
+                    for attempt in range(3):
+                        try:
+                            run_adb_command(install_cmd, device)
+                            with print_lock:
+                                tqdm.write(f"{device}: {package} インストール成功 (試行{attempt+1}回目)")
+                            break
+                        except Exception as e:
+                            if attempt == 2:
+                                raise
+                            time.sleep(1)
+                            
+                    progress_bar.update(1)
+                    
+                except Exception as e:
+                    with print_lock:
+                        tqdm.write(f"{device}: {package} インストール失敗 - {str(e)}")
+                    failed_packages.append(package)
+                    progress_bar.update(1)
+            
+            return {device: failed_packages}
+
+        print(f"\n{len(packages)} パッケージを {len(device_ids)} デバイスに並列インストール...")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(device_install, device) for device in device_ids]
+            failed_devices = {}
+            
+            for future in as_completed(futures):
+                result = future.result()
+                failed_devices.update(result)
+
+        progress_bar.close()
+        success_devices = [d for d in device_ids if d not in failed_devices]
+        
+        print(f"\n完了: 成功 {len(success_devices)}/{len(device_ids)} デバイス")
         if failed_devices:
             print("\n失敗したデバイスとパッケージ:")
             for dev, pkgs in failed_devices.items():
