@@ -194,7 +194,7 @@ def download_apk(package_names: List[str] = None, device_id: str = None, input_f
         print(f"エラーが発生しました: {error_msg}")
         raise
 
-def install_apk(device_ids: List[str] = None, input_file: str = None, devices_csv: str = None, max_workers: int = 4) -> None:
+def install_apk(device_ids: List[str] = None, input_file: str = None, devices_csv: str = None, max_workers: int = 4, grant_permissions: bool = False) -> None:
     """
     APKを並列インストール
     
@@ -255,7 +255,10 @@ def install_apk(device_ids: List[str] = None, input_file: str = None, devices_cs
                         progress_bar.update(1)
                         continue
 
-                    install_cmd = ["install-multiple", "-r"] + apk_files
+                    install_cmd = ["install-multiple", "-r"]
+                    if grant_permissions:
+                        install_cmd.append("-g")
+                    install_cmd += apk_files
                     
                     # リトライメカニズム（最大3回）
                     for attempt in range(3):
@@ -331,6 +334,7 @@ def main():
     device_group.add_argument('-d', '--devices', nargs='+', help='デバイスIDリスト')
     device_group.add_argument('-c', '--csv', help='get_devicesで出力したデバイス情報CSV')
     install_parser.add_argument('-f', '--file', required=True, help='パッケージリストファイル（get_appsで出力した形式）')
+    install_parser.add_argument('-g', '--grant-permissions', action='store_true', help='権限を自動付与（-gオプション）')
     
     args = parser.parse_args()
     
@@ -352,7 +356,8 @@ def main():
             install_apk(
                 device_ids=args.devices,
                 input_file=args.file,
-                devices_csv=args.csv
+                devices_csv=args.csv,
+                grant_permissions=args.grant_permissions
             )
             
     except Exception as e:

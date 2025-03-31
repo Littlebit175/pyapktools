@@ -54,7 +54,8 @@ python apk_manager.py download -p com.example.app1 com.example.app2 -d <デバ�
 python apk_manager.py install -c devices.csv -f apps.txt
 
 # 最大並列数を指定（--max_workersオプション）
-python apk_manager.py install -c devices.csv -f apps.txt --max_workers 4  # デフォルト値
+# 位置情報など、アプリが使用する権限をすべて自動付与 (-gオプション)
+python apk_manager.py install -c devices.csv -f apps.txt --max_workers 4 -g
 ```
 
 **主な特徴**:
